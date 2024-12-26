@@ -20,6 +20,8 @@ public interface UsersManagerAPI {
 
     void decreaseCredit(String userID, int amount) throws RepositoryException;
 
+    void move(String userID, double newX, double newY);
+
     /**
      * Allows the observer (UsersManagerVerticle, so indirectly the other services) to watch out the users.
      * @param observer

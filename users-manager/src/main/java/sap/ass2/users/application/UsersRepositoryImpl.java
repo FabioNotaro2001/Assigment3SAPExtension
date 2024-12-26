@@ -33,32 +33,6 @@ public class UsersRepositoryImpl implements UsersRepository, UserEventsConsumer 
 		listener.onEach(this::consumeEvents);
     }
 
-	// Save the given JSON object in the db folder.
-    // private void saveObj(String id, JsonObject obj) throws RepositoryException { 
-	// 	try {
-	// 		FileWriter fw = new FileWriter(Path.of(dbaseFolder, id + ".json").toString());
-	// 		java.io.BufferedWriter wr = new BufferedWriter(fw);	
-		
-	// 		wr.write(obj.encodePrettily());
-	// 		wr.flush();
-	// 		fw.close();
-	// 	} catch (Exception ex) {
-	// 		ex.printStackTrace();
-	// 		throw new RepositoryException();  
-	// 	}
-	// }
-	
-	// private void makeDir(String name) {
-	// 	try {
-	// 		File dir = new File(name);
-	// 		if (!dir.exists()) {
-	// 			dir.mkdir();
-	// 		}
-	// 	} catch (Exception ex) {
-	// 		ex.printStackTrace();
-	// 	}
-	// }
-
 	/**
 	 * // Converts the given user into a JSON object and then save it into the DB.
 	 */
@@ -107,27 +81,6 @@ public class UsersRepositoryImpl implements UsersRepository, UserEventsConsumer 
 
     @Override
     public List<User> getUsers() throws RepositoryException {
-        // List<User> users = new ArrayList<>();
-		// File userDir = new File(dbaseFolder);
-		
-		// if (userDir.exists() && userDir.isDirectory()) {
-		// 	File[] userFiles = userDir.listFiles((dir, name) -> name.endsWith(".json"));  
-			
-		// 	if (userFiles != null) {
-		// 		for (File userFile : userFiles) {
-		// 			try {
-		// 				String content = new String(Files.readAllBytes(userFile.toPath()));
-		// 				JsonObject obj = new JsonObject(content);
-						
-		// 				User user = new User(obj.getString("ID"), obj.getInteger("CREDIT"));
-		// 				users.add(user);
-		// 			} catch (IOException e) {
-		// 				throw new RepositoryException(); 
-		// 			}
-		// 		}
-		// 	}
-		// }
-
 		if (users.isEmpty()) {
 			loadUsers();
 		}
@@ -137,21 +90,6 @@ public class UsersRepositoryImpl implements UsersRepository, UserEventsConsumer 
 
     @Override
     public Optional<User> getUserByID(String id) throws RepositoryException {
-        // File userFile = new File();
-
-		// if (!userFile.exists()) {
-		// 	return Optional.empty();  
-		// } else {
-		// 	try {
-		// 		String content = new String(Files.readAllBytes(userFile.toPath()));
-		// 		JsonObject obj = new JsonObject(content);
-				
-		// 		return Optional.of(new User(obj.getString("ID"), obj.getInteger("CREDIT")));
-		// 	} catch (IOException e) {
-		// 		throw new RepositoryException();  
-		// 	}
-		// }
-
 		if (users.isEmpty()) {
 			loadUsers();
 		}
@@ -163,7 +101,7 @@ public class UsersRepositoryImpl implements UsersRepository, UserEventsConsumer 
 	public void consumeEvents(String message) {
 		JsonObject obj = new JsonObject(message);
 		try {
-			saveUserEvent(UserEvent.from(obj.getString("userId"), obj.getInteger("credits")));
+			saveUserEvent(UserEvent.from(obj.getString("userId"), obj.getInteger("credits"), obj.getDouble("deltaX"), obj.getDouble("deltaY")));
 		} catch (RepositoryException e) {
 			e.printStackTrace();
 			throw new RuntimeException(e);

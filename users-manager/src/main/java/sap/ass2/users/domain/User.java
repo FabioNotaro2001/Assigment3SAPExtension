@@ -5,10 +5,14 @@ import sap.ddd.Entity;
 public class User implements Entity<String> {
     private String id;      
     private int credit;     
+    private double x;
+    private double y;
 
     public User(String id) {
         this.id = id;         
-        this.credit = 0;       
+        this.credit = 0;   
+        this.x = 0;
+        this.y = 0;    
     }
 
     public User(String id, int credit) {
@@ -24,6 +28,14 @@ public class User implements Entity<String> {
         return credit;          
     }
 
+    public double getX(){
+        return this.x;
+    }
+
+    public double getY(){
+        return this.y;
+    }
+
     public void rechargeCredit(int deltaCredit) {
         credit += deltaCredit;  
     }
@@ -35,8 +47,13 @@ public class User implements Entity<String> {
         }
     }
 
+    public void move(double newX, double newY){
+        this.x = newX;
+        this.y = newY;
+    }
+
     public String toString() {
-        return "{ id: " + id + ", credit: " + credit + " }";
+        return "{ id: " + id + ", credit: " + credit +  ", position: (" + this.x +", " + this.y +") }";
     }
 
     public void applyEvent(UserEvent event) {

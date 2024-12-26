@@ -31,13 +31,17 @@ public class UsersManagerImpl implements UsersManagerAPI {
     private static JsonObject toJSON(User user) {
         return new JsonObject()
             .put("userId", user.getId())
-            .put("credit", user.getCredit());
+            .put("credit", user.getCredit())
+            .put("x", user.getX())
+            .put("y", user.getY());
     }
     
-    private static JsonObject userEventToJSON(String userId, int credits) {
+    private static JsonObject userEventToJSON(String userId, int credits, double x, double y) {
         return new JsonObject()
             .put("userId", userId)
-            .put("credits", credits);
+            .put("credits", credits)
+            .put("deltaX", x)
+            .put("deltaY", y);
     }
 
     @Override
@@ -50,7 +54,7 @@ public class UsersManagerImpl implements UsersManagerAPI {
         var user = new User(userID, 0);
         // this.userRepository.saveUserEvent(user);
         try{
-            kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(user.getId(), user.getCredit()).encode()));
+            kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(user.getId(), user.getCredit(), 0, 0).encode()));
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -76,7 +80,7 @@ public class UsersManagerImpl implements UsersManagerAPI {
         var user = userOpt.get(); 
         user.rechargeCredit(credit); 
         // this.userRepository.saveUserEvent(user);
-        kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, credit).encode()));
+        kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, credit, 0, 0).encode()));
     }
 
     @Override
@@ -89,7 +93,20 @@ public class UsersManagerImpl implements UsersManagerAPI {
         var user = userOpt.get(); 
         user.decreaseCredit(amount); 
         // this.userRepository.saveUserEvent(user);
-        kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, -amount).encode()));
+        kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, -amount, 0, 0).encode()));
+    }
+    
+    @Override
+    public void move(String userID, double newX, double newY) {
+        var userOpt = this.users.stream().filter(u -> u.getId().equals(userID)).findFirst(); 
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("Invalid user id");
+        }
+        var user = userOpt.get(); 
+        var oldX = user.getX();
+        var oldY = user.getY();
+        user.move(newX, newY);
+        kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, 0, newX - oldX, newY - oldY).encode()));
     }
 
     @Override

@@ -24,7 +24,7 @@ public class RidesManagerImpl implements RidesManagerAPI, RideEventObserver {
     private List<RideEventObserver> observers;  // observer = RidesManagerVerticle.
     private RidesExecutionVerticle rideExecutor;    // Verticle that manages and executes the rides.
 
-    public RidesManagerImpl(UsersManagerRemoteAPI usersManager, EbikesManagerRemoteAPI ebikesManager){
+    public RidesManagerImpl(UsersManagerRemoteAPI usersManager, EbikesManagerRemoteAPI ebikesManager, Environment environment){
         this.usersManager = usersManager;
         this.ebikesManager = ebikesManager;
         
@@ -32,7 +32,7 @@ public class RidesManagerImpl implements RidesManagerAPI, RideEventObserver {
         this.nextRideId = 0;
         this.observers = Collections.synchronizedList(new ArrayList<>());
 
-        this.rideExecutor = new RidesExecutionVerticle(this, usersManager, ebikesManager);
+        this.rideExecutor = new RidesExecutionVerticle(this, usersManager, ebikesManager, environment);
         this.rideExecutor.launch();
     }
 
@@ -52,7 +52,7 @@ public class RidesManagerImpl implements RidesManagerAPI, RideEventObserver {
 
     // Converts a JSON into an user.
     private static User userFromJSON(JsonObject obj){
-        return new User(obj.getString("userId"), obj.getInteger("credit"));
+        return new User(obj.getString("userId"), obj.getInteger("credit"), obj.getDouble("x"), obj.getDouble("y"));
     }
 
     // Converts a JSON into an user.

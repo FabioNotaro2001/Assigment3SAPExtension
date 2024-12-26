@@ -8,6 +8,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpMethod;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
 /**
@@ -70,6 +71,26 @@ public class UsersManagerProxy implements UsersManagerRemoteAPI {
 			String payload = body.encodePrettily();
 			req.putHeader("content-length", "" + payload.length());
 			req.write(payload);
+			req.send();
+		})
+		.onFailure(f -> {
+			p.fail(f.getMessage());
+		});
+		return p.future();
+	}
+
+	@Override
+	public Future<JsonArray> getAllUsers() {
+		Promise<JsonArray> p = Promise.promise();
+		client
+		.request(HttpMethod.GET, "/api/users")
+		.onSuccess(req -> {
+			req.response().onSuccess(response -> {
+				response.body().onSuccess(buf -> {
+					JsonObject obj = buf.toJsonObject();
+					p.complete(obj.getJsonArray("users"));	// Completes the promise for the admin GUI.
+				});
+			});
 			req.send();
 		})
 		.onFailure(f -> {

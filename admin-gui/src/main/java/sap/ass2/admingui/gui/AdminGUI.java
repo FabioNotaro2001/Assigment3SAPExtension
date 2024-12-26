@@ -20,7 +20,6 @@ import sap.ass2.admingui.library.*;
 import sap.ass2.admingui.domain.*;
 
 public class AdminGUI extends JFrame implements ActionListener, UserEventObserver, RideEventObserver, EbikeEventObserver {
-
 	private VisualiserPanel centralPanel; 
     private JButton addEBikeButton; 
 	
@@ -50,7 +49,7 @@ public class AdminGUI extends JFrame implements ActionListener, UserEventObserve
     }
 
 	private static User jsonObjToUser(JsonObject obj){
-        return new User(obj.getString("userId"), obj.getInteger("credit"));
+        return new User(obj.getString("userId"), obj.getInteger("credit"), obj.getDouble("x"), obj.getDouble("y"));
     }
 
 	private static Ride jsonObjToRide(JsonObject obj){
@@ -228,12 +227,18 @@ public class AdminGUI extends JFrame implements ActionListener, UserEventObserve
     		g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
     		g2.clearRect(0, 0, this.getWidth(), this.getHeight()); 
 
-			
 			app.bikes.values().forEach(b -> {
     			int x0 = (int) (dx + b.locX()); 
 		        int y0 = (int) (dy - b.locY()); 
 		        g2.drawOval(x0, y0, 10, 10); 
 		        g2.drawString(b.id(), x0, y0 + 35);
+			});
+
+			app.users.values().forEach(u -> {
+				int x = (int) (dx + u.x()); 
+		        int y = (int) (dy - u.y()); 
+		        g2.drawRect(x, y, 10, 10); 
+		        g2.drawString(u.id(), x, y + 35);
 			});
         }
         
@@ -298,12 +303,16 @@ public class AdminGUI extends JFrame implements ActionListener, UserEventObserve
 	}
 
 	@Override
-	public void userUpdated(String userID, int creditChange) {
+	public void userUpdated(String userID, int creditChange, double deltaX, double deltaY) {
 		var user = Optional.ofNullable(users.get(userID));
-		if (user.isEmpty()) {
-			SwingUtilities.invokeLater(() -> this.addOrReplaceUser(new User(userID, creditChange)));
-		} else {
-			SwingUtilities.invokeLater(() -> this.addOrReplaceUser(user.get().updateCredit(creditChange)));
-		}
+
+		SwingUtilities.invokeLater(() -> {
+			if(user.isEmpty()){
+				this.addOrReplaceUser(new User(userID, creditChange, deltaX, deltaY));
+			} else {
+				this.addOrReplaceUser(user.get().update(creditChange, deltaX, deltaY));
+			}
+			centralPanel.refresh();
+		});
 	}
 }

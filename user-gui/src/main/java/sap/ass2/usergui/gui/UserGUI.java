@@ -32,6 +32,9 @@ public class UserGUI extends JFrame implements ActionListener, UserEventObserver
     private Ride launchedRide;                      
     private ApplicationAPI app;
     private List<User> availableUsers;
+    private JTextField changeXTextField;
+    private JTextField changeYTextField;
+    private JButton moveButton;
 
     public UserGUI(ApplicationAPI app) {
         this.app = app;
@@ -77,15 +80,24 @@ public class UserGUI extends JFrame implements ActionListener, UserEventObserver
         endRideButton.addActionListener(this);        
         endRideButton.setEnabled(false);                
         creditRechargeButton = new JButton("RECHARGE"); 
-        creditRechargeButton.addActionListener(this);   
+        creditRechargeButton.addActionListener(this);  
+        moveButton = new JButton("MOVE");
+        moveButton.addActionListener(this); 
         creditRechargeTextField = new JTextField();     
         creditRechargeTextField.setColumns(2);          
-        userCreditLabel = new JLabel("Credit: ");      
+        userCreditLabel = new JLabel("Credit: ");    
+        changeXTextField =   new JTextField();
+        changeXTextField.setColumns(2);       
+        changeYTextField = new JTextField();
+        changeYTextField.setColumns(2);    
         ridePanel.add(startRideButton);                 
         ridePanel.add(endRideButton);                  
         ridePanel.add(userCreditLabel);                 
         ridePanel.add(creditRechargeTextField);        
-        ridePanel.add(creditRechargeButton);          
+        ridePanel.add(creditRechargeButton);    
+        ridePanel.add(changeXTextField);
+        ridePanel.add(changeYTextField);
+        ridePanel.add(moveButton);      
 
         mainPanel.add(userSelectionPanel, "UserSelection"); 
         mainPanel.add(ridePanel, "RidePanel");              
@@ -160,6 +172,12 @@ public class UserGUI extends JFrame implements ActionListener, UserEventObserver
             d.setVisible(true);
         } else if (e.getSource() == endRideButton) {
             this.app.rides().stopRide(launchedRide.rideId(), launchedRide.userId())
+                .onFailure(ex -> {
+                    JOptionPane.showMessageDialog(this, ex.getMessage(), "ERROR", JOptionPane.ERROR_MESSAGE);
+                });
+        }
+        else if (e.getSource() == moveButton) {
+            this.app.users().move(selectedUser.id(), Double.parseDouble(changeXTextField.getText()), Double.parseDouble(changeYTextField.getText()))
                 .onFailure(ex -> {
                     JOptionPane.showMessageDialog(this, ex.getMessage(), "ERROR", JOptionPane.ERROR_MESSAGE);
                 });

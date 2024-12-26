@@ -138,6 +138,35 @@ public class UsersProxy implements UsersAPI {
 	}
 
 	@Override
+	public Future<Void> move(String userID, double newX, double newY) {
+		Promise<Void> p = Promise.promise();
+            client
+            .request(HttpMethod.POST, "/api/users/" + userID + "/move")
+            .onSuccess(req -> {
+                req.response().onSuccess(response -> {
+                    response.body().onSuccess(buf -> {
+                        p.complete();	// Completes the promise for the user GUI.
+                    });
+                });
+
+				// Request setup before sending.
+                req.putHeader("content-type", "application/json");
+                JsonObject body = new JsonObject();
+                body.put("x", newX);
+				body.put("y", newY);
+                String payload = body.encodePrettily();
+                req.putHeader("content-length", "" + payload.length());
+                req.write(payload);
+                req.send();
+
+            })
+            .onFailure(f -> {
+                p.fail(f.getMessage());
+            });
+            return p.future();
+	}
+
+	@Override
 	public Future<JsonObject> subscribeToUserEvents(String userID, UserEventObserver observer) {	// observer = user gui.
 		Promise<JsonObject> p = Promise.promise();
 		
@@ -177,5 +206,4 @@ public class UsersProxy implements UsersAPI {
 		
 		return p.future();
 	}
-
 }

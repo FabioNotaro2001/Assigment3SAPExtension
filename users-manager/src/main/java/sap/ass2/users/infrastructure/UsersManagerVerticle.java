@@ -38,6 +38,7 @@ public class UsersManagerVerticle extends AbstractVerticle implements UserEvents
         router.route(HttpMethod.GET, "/api/users/:userId").handler(this::getUserByID);
         router.route(HttpMethod.POST, "/api/users/:userId/recharge-credit").handler(this::rechargeCredit);
         router.route(HttpMethod.POST, "/api/users/:userId/decrease-credit").handler(this::decreaseCredit);
+        router.route(HttpMethod.POST, "/api/users/:userId/move").handler(this::move);
         router.route("/api/users/:userId/events").handler(this::handleEventSubscription);
         
         server.requestHandler(router).listen(this.port);
@@ -152,6 +153,32 @@ public class UsersManagerVerticle extends AbstractVerticle implements UserEvents
             JsonObject response = new JsonObject();
             try {
                 this.usersAPI.decreaseCredit(userID, credit);
+                sendReply(context.response(), response);
+            } catch (Exception ex) {
+                sendServiceError(context.response(), ex);
+            }
+        });
+    }
+
+    protected void move(RoutingContext context) {
+        logger.log(Level.INFO, "Received 'move'");
+
+        context.request().handler(buffer -> {
+            JsonObject data = buffer.toJsonObject();
+            String userID = context.pathParam("userId");
+            double x;
+            double y;
+            try {
+                x = data.getDouble("x");
+                y = data.getDouble("y");
+            } catch (Exception ex) {
+                sendBadRequest(context.response(), ex);
+                return;
+            }
+
+            JsonObject response = new JsonObject();
+            try {
+                this.usersAPI.move(userID, x, y);
                 sendReply(context.response(), response);
             } catch (Exception ex) {
                 sendServiceError(context.response(), ex);

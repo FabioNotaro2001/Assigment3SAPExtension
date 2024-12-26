@@ -84,9 +84,11 @@ public class UsersProxy implements UsersAPI {
                         // User parameters to change.
 						String userID = obj.getString("userId");
                         int creditChange = obj.getInteger("credits");
+						double deltaX = obj.getDouble("deltaX");
+						double deltaY = obj.getDouble("deltaY");
                         
 						// Notify event to the admin GUI.
-						observer.userUpdated(userID, creditChange);
+						observer.userUpdated(userID, creditChange, deltaX, deltaY);
                     }
                 });
             } else {

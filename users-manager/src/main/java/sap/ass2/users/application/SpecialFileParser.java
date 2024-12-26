@@ -22,7 +22,7 @@ public class SpecialFileParser {
         try (Scanner scanner = new Scanner(this.path)) {
             scanner.forEachRemaining(event -> {
                 var parts = event.split(" ");
-                events.add(new UserEvent(parts[0], Integer.parseInt(parts[1])));
+                events.add(new UserEvent(parts[0], Integer.parseInt(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3])));
             });
             return events;
         }
@@ -30,7 +30,7 @@ public class SpecialFileParser {
 
     public synchronized void addEvent(UserEvent event) throws IOException {
         try (var writer = new BufferedWriter(new FileWriter(this.path.toString(), true))) {
-            writer.append(String.format("%s %d", event.userId(), event.creditDelta()));
+            writer.append(String.format("%s %d %f %f", event.userId(), event.creditDelta(), event.deltaX(), event.deltaY()));
             writer.newLine();
         }
     }

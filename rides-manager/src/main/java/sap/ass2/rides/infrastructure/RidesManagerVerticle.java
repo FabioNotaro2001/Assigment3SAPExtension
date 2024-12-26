@@ -59,6 +59,7 @@ public class RidesManagerVerticle extends AbstractVerticle implements RideEventO
     }
 
     private static void sendServiceError(HttpServerResponse response, Exception ex) {
+        logger.log(Level.SEVERE, "Exception", ex);
         response.setStatusCode(500);
         response.putHeader("content-type", "application/json");
 
