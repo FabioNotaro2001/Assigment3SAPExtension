@@ -23,10 +23,10 @@ public class SpecialFileParser {
     public synchronized List<EbikeEvent> getEbikeEvents() throws IOException {
         List<EbikeEvent> events = new ArrayList<>();
         try (Scanner scanner = new Scanner(this.path)) {
-            scanner.forEachRemaining(event -> {
+            while(scanner.hasNextLine()){
+                String event = scanner.nextLine();
                 var parts = event.split(" ");
                 try{
-
                     String ebikeId = parts[0];
                     Optional<EbikeState> newState = parts[1].equals("-") ? Optional.empty() : Optional.of(EbikeState.valueOf(parts[1]));
                     V2d deltaPos = new V2d(Double.parseDouble(parts[2]), Double.parseDouble(parts[3]));
@@ -38,7 +38,7 @@ public class SpecialFileParser {
                 } catch(Exception e){
                     System.out.println(String.format("Failed to parse event: '%s'", event));
                 }
-            });
+            }
             return events;
         }
     }

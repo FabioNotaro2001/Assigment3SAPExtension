@@ -10,4 +10,5 @@ public interface UsersManagerRemoteAPI {
     Future<Optional<JsonObject>> getUserByID(String userID);
     Future<Void> decreaseCredit(String userID, int amount);
     Future<JsonArray> getAllUsers();
+    Future<Void> move(String userID, double x, double y);
 }

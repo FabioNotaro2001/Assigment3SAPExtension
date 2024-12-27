@@ -43,7 +43,6 @@ public class RidesProxy implements RidesAPI {
 			req.response().onSuccess(response -> {
 				response.body().onSuccess(buf -> {
 					JsonObject obj = buf.toJsonObject();
-					System.out.println("UKAGEFULISGDUFIDSUIFUS : " + obj);
 					p.complete(obj.getJsonObject("ride"));	// Completes the promise for the user GUI.
 				});
 			});

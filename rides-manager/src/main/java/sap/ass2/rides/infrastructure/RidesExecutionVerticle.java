@@ -1,6 +1,5 @@
 package sap.ass2.rides.infrastructure;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -112,6 +111,13 @@ public class RidesExecutionVerticle extends AbstractVerticle {
         return List.of(xN / module, yN / module); // Returns the rotated and normalized vector.
     }
 
+    private void clearRide(String rideID){
+        this.rides.remove(rideID);
+        this.rideStates.remove(rideID);
+        this.timeVars.remove(rideID);
+        this.stopRideRequested.remove(rideID);
+    }
+
     // Called by RidesManager.
     public void launchRide(String rideID, String userID, String ebikeID) {
         this.timeVars.put(rideID, TimeVariables.now());
@@ -128,7 +134,10 @@ public class RidesExecutionVerticle extends AbstractVerticle {
             // END OF SENSE PHASE.
 
             if(user == null || ebike == null){
+                logger.log(Level.INFO, "qualcosa è null!!!!!!!!!!!!!");
+                this.clearRide(rideID);
                 this.observer.rideEnded(rideID, RideStopReason.SERVICE_ERROR.reason);
+                this.ebikesManager.updateBike(ebikeID, Optional.ofNullable(EbikeState.AVAILABLE), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
                 consumer.unregister();
                 return;
             }
@@ -136,8 +145,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
             // Checks of the ride must be stopped.
             var stopRequestedOpt = Optional.ofNullable(this.stopRideRequested.get(rideID));
             if (stopRequestedOpt.isPresent()) {
-                this.stopRideRequested.remove(rideID);
-                this.rides.remove(rideID);
+                this.clearRide(rideID);
                 this.observer.rideEnded(rideID, stopRequestedOpt.get().reason);
 
                 this.ebikesManager.updateBike(ebikeID, Optional.ofNullable(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
@@ -151,16 +159,22 @@ public class RidesExecutionVerticle extends AbstractVerticle {
             // DECIDE PHASE.
             RideState rideState = this.rideStates.get(rideID);
             if(rideState == RideState.GOING_TO_USER){
+                logger.log(Level.INFO, "stato ride going to user!!!!!!!!!");
                 var oldX = ebike.locX();
                 var oldY = ebike.locY();
                 var dirX = user.x() - oldX;
                 var dirY = user.y() - oldY;
-                var newX = oldX + dirX;
-                var newY = oldY + dirY;
+                var dist = Math.sqrt(dirX * dirX + dirY * dirY);
+                var newX = oldX; 
+                var newY = oldY;
+
+                if(dist != 0){
+                    newX = oldX + dirX / dist;
+                    newY = oldY + dirY / dist;
+                }
 
                 var newDirX = user.x() - newX;
                 var newDirY = user.y() - newY;
-                var dist = Math.sqrt(dirX * dirX + dirY * dirY);
                 var newDist = Math.sqrt(newDirX * newDirX + newDirY * newDirY);
                 if(newDist >= dist){
                     newX = user.x();
@@ -180,6 +194,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                 // END OF ACT PHASE.
             } else {    // Regular ride type.
                 // DECIDE PHASE.
+                logger.log(Level.INFO, "stato ride normale!!!!!!!!");
                 if (ebike.batteryLevel() > 0 && user.credit() > 0) {
                     // Get current location and direction of the bike.
                     var oldX = ebike.locX();
@@ -243,6 +258,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     Optional.of(newX), Optional.of(newY),
                     Optional.of(newDirX), Optional.of(newDirY),
                     Optional.of(1.0), Optional.of(newBatteryLevel));
+                    this.usersManager.move(userID, newX, newY);
                     // END OF ACT PHASE.
                     
                     this.timeVars.put(rideID, timeVar);
@@ -253,7 +269,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     this.ebikesManager.updateBike(ebikeID, Optional.of(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE),
                     Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
                     
-                    this.rides.remove(rideID);
+                    this.clearRide(rideID);
                     this.observer.rideEnded(rideID, (ebike.batteryLevel() > 0 ? RideStopReason.USER_RAN_OUT_OF_CREDIT : RideStopReason.EBIKE_RAN_OUT_OF_BATTERY).reason);
                     consumer.unregister();
                     

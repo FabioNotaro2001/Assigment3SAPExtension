@@ -20,10 +20,11 @@ public class SpecialFileParser {
     public synchronized List<UserEvent> getUserEvents() throws IOException {
         List<UserEvent> events = new ArrayList<>();
         try (Scanner scanner = new Scanner(this.path)) {
-            scanner.forEachRemaining(event -> {
+            while (scanner.hasNextLine()){
+                String event = scanner.nextLine();
                 var parts = event.split(" ");
                 events.add(new UserEvent(parts[0], Integer.parseInt(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3])));
-            });
+            }
             return events;
         }
     }

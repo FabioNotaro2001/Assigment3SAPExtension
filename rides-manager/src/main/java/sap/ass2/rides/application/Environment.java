@@ -3,6 +3,8 @@ package sap.ass2.rides.application;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import io.vertx.core.json.JsonArray;
@@ -18,11 +20,19 @@ public class Environment {
     private Map<String, User> users;
     private Map<String, Ebike> ebikes;
     private boolean ready;
+    private static Logger logger = Logger.getLogger("[ENVIRONMENT]");
 
     public Environment(CustomKafkaListener listenerForUsers, CustomKafkaListener listenerForEbikes){
         listenerForUsers.onEach(this::consumeUsersEvent);
         listenerForEbikes.onEach(this::consumeEbikesEvent);
         this.ready = false;
+    }
+
+    public void init(JsonArray users, JsonArray ebikes){
+        this.users = users.stream().map(u -> userFromJSON((JsonObject)u)).collect(Collectors.toConcurrentMap(u -> u.id(), Function.identity()));
+        this.ebikes = ebikes.stream().map(e -> ebikeFromJSON((JsonObject)e)).collect(Collectors.toConcurrentMap(e -> e.id(), Function.identity()));
+        this.ready = true;
+        logger.log(Level.INFO, "Environment initialized with " + this.users.size() + " users and " + this.ebikes.size() + " ebikes!");
     }
 
     private User userFromJSON(JsonObject obj){
@@ -41,11 +51,6 @@ public class Environment {
         return new Ebike(id, state, x, y, directionX, directionY, speed, batteryLevel);
     }
 
-    public void init(JsonArray users, JsonArray ebikes){
-        this.users = users.stream().map(u -> userFromJSON((JsonObject)u)).collect(Collectors.toConcurrentMap(u -> u.id(), Function.identity()));
-        this.ebikes = ebikes.stream().map(e -> ebikeFromJSON((JsonObject)e)).collect(Collectors.toConcurrentMap(e -> e.id(), Function.identity()));
-        this.ready = true;
-    }
 
     public User getUser(String id){
         return this.ready ? this.users.get(id) : null;
@@ -69,6 +74,7 @@ public class Environment {
         } else {
             this.users.put(id, User.from(event));
         }
+        logger.log(Level.INFO, "User update: " + obj);
     }
 
     private void consumeEbikesEvent(String message){
@@ -83,6 +89,6 @@ public class Environment {
         } else {
             this.ebikes.put(id, Ebike.from(event));
         }
+        logger.log(Level.INFO, "Ebike update: " + obj);
     }
-
 }

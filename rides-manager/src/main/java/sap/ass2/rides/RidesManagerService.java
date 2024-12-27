@@ -2,6 +2,7 @@ package sap.ass2.rides;
 
 import java.net.URL;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonArray;
@@ -18,10 +19,14 @@ public class RidesManagerService {
     private RidesManagerAPI ridesManager;
     private RidesManagerController ridesController;
     private URL localAddress;
+    private CustomKafkaListener usersListener;
+    private CustomKafkaListener ebikesListener;
 
     public RidesManagerService(URL localAddress, UsersManagerRemoteAPI usersManager, EbikesManagerRemoteAPI ebikesManager) {
         this.localAddress = localAddress;
-        Environment environment = new Environment(new CustomKafkaListener("user-events", KafkaConsumerFactory.defaultConsumer()), new CustomKafkaListener("ebike-events", KafkaConsumerFactory.defaultConsumer()));
+        this.usersListener = new CustomKafkaListener("user-events", KafkaConsumerFactory.defaultConsumer());
+        this.ebikesListener = new CustomKafkaListener("ebike-events", KafkaConsumerFactory.defaultConsumer());
+        Environment environment = new Environment(this.usersListener, this.ebikesListener);
 
         this.ridesManager = new RidesManagerImpl(usersManager, ebikesManager, environment);
 
@@ -39,5 +44,7 @@ public class RidesManagerService {
         // Starts the ride controller (so that it can start the RidesExecutionVerticle).
         this.ridesController = new RidesManagerController(this.localAddress.getPort());
         this.ridesController.init(this.ridesManager);
+        CompletableFuture.runAsync(this.usersListener);
+        CompletableFuture.runAsync(this.ebikesListener);
     }
 }
