@@ -1,6 +1,5 @@
 package sap.ass2.users.application;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -10,7 +9,6 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import sap.ass2.users.domain.RepositoryException;
 import sap.ass2.users.domain.User;
-import sap.ass2.users.domain.UserEventObserver;
 import sap.ass2.users.domain.UsersRepository;
 
 public class UsersManagerImpl implements UsersManagerAPI {
@@ -18,11 +16,9 @@ public class UsersManagerImpl implements UsersManagerAPI {
 
     // private final UsersRepository userRepository;
     private final List<User> users;
-    private List<UserEventObserver> observers;  // observer = UsersManagerVerticle.
     private KafkaProducer<String, String> kafkaProducer;
 
     public UsersManagerImpl(UsersRepository userRepository, KafkaProducer<String, String> kafkaProducer) throws RepositoryException {
-        this.observers = Collections.synchronizedList(new ArrayList<>());
         this.users = Collections.synchronizedList(userRepository.getUsers());
         this.kafkaProducer = kafkaProducer;
     }
@@ -107,10 +103,5 @@ public class UsersManagerImpl implements UsersManagerAPI {
         var oldY = user.getY();
         user.move(newX, newY);
         kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, 0, newX - oldX, newY - oldY).encode()));
-    }
-
-    @Override
-    public void subscribeToUserEvents(UserEventObserver observer) {
-        this.observers.add(observer);
     }
 }

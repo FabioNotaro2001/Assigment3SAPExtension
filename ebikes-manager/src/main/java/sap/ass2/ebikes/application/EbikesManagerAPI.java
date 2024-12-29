@@ -3,7 +3,6 @@ package sap.ass2.ebikes.application;
 import java.util.Optional;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import sap.ass2.ebikes.domain.EbikeEventObserver;
 import sap.ass2.ebikes.domain.RepositoryException;
 import sap.ass2.ebikes.domain.Ebike.EbikeState;
 
@@ -27,10 +26,4 @@ public interface EbikesManagerAPI {
                     Optional<Double> directionX, Optional<Double> directionY, 
                     Optional<Double> speed, 
                     Optional<Integer> batteryLevel) throws RepositoryException, IllegalArgumentException;
-
-    /**
-     * Allows the observer (EbikesManagerVerticle, so indirectly the other services) to watch out the bikes.
-     * @param observer
-     */
-    void subscribeToEbikeEvents(EbikeEventObserver observer);
 }
