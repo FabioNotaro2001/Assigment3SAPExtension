@@ -98,4 +98,33 @@ public class UsersManagerProxy implements UsersManagerRemoteAPI {
 		});
 		return p.future();
 	}
+
+	@Override
+	public Future<Void> move(String userID, double x, double y) {
+		Promise<Void> p = Promise.promise();
+            client
+            .request(HttpMethod.POST, "/api/users/" + userID + "/move")
+            .onSuccess(req -> {
+                req.response().onSuccess(response -> {
+                    response.body().onSuccess(buf -> {
+                        p.complete();	// Completes the promise for the user GUI.
+                    });
+                });
+
+				// Request setup before sending.
+                req.putHeader("content-type", "application/json");
+                JsonObject body = new JsonObject();
+                body.put("x", x);
+				body.put("y", y);
+                String payload = body.encodePrettily();
+                req.putHeader("content-length", "" + payload.length());
+                req.write(payload);
+                req.send();
+
+            })
+            .onFailure(f -> {
+                p.fail(f.getMessage());
+            });
+            return p.future();
+	}
 }
