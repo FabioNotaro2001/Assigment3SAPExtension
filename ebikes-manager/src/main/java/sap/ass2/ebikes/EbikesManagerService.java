@@ -24,7 +24,7 @@ public class EbikesManagerService {
     public EbikesManagerService(URL localAddress) throws RepositoryException{
         this.localAddress = localAddress;
         this.listener = new CustomKafkaListener("ebike-events", KafkaConsumerFactory.defaultConsumer());
-        this.ebikesManager = new EbikesManagerImpl(new EbikesRepositoryImpl(listener), KafkaProducerFactory.kafkaProducer());
+        this.ebikesManager = new EbikesManagerImpl(new EbikesRepositoryImpl(listener), KafkaProducerFactory.kafkaProducer(), this.listener);
         this.listener.onEach(e -> logger.log(Level.INFO, "Received event: " + e));
     }
 

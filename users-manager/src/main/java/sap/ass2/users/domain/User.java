@@ -56,9 +56,12 @@ public class User implements Entity<String> {
         return "{ id: " + id + ", credit: " + credit +  ", position: (" + this.x +", " + this.y +") }";
     }
 
-    public void applyEvent(UserEvent event) {
+    public User applyEvent(UserEvent event) {
         if (this.id.equals(event.userId())) {
             this.credit += event.creditDelta();
+            this.x += event.deltaX();
+            this.y += event.deltaY();
         }
+        return this;
     }
 }

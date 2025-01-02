@@ -232,7 +232,6 @@ public class EbikesManagerVerticle extends AbstractVerticle implements EbikeEven
 
     @Override
     public void consumeEvents(String message) {
-
         var eventBus = vertx.eventBus();
         var jsonObj = new JsonObject(message);
         var newState = Optional.ofNullable(jsonObj.getString("newState"));

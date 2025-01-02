@@ -2,25 +2,31 @@ package sap.ass2.users.application;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import sap.ass2.users.domain.RepositoryException;
 import sap.ass2.users.domain.User;
+import sap.ass2.users.domain.UserEvent;
 import sap.ass2.users.domain.UsersRepository;
 
-public class UsersManagerImpl implements UsersManagerAPI {
+public class UsersManagerImpl implements UsersManagerAPI, UserEventsConsumer {
     private static final String USER_EVENTS_TOPIC = "user-events";
 
     // private final UsersRepository userRepository;
-    private final List<User> users;
+    private final Map<String, User> users;
     private KafkaProducer<String, String> kafkaProducer;
 
-    public UsersManagerImpl(UsersRepository userRepository, KafkaProducer<String, String> kafkaProducer) throws RepositoryException {
-        this.users = Collections.synchronizedList(userRepository.getUsers());
+    public UsersManagerImpl(UsersRepository userRepository, KafkaProducer<String, String> kafkaProducer, CustomKafkaListener listener) throws RepositoryException {
+        this.users = userRepository.getUsers().stream().collect(Collectors.toConcurrentMap(u -> u.getId(), Function.identity()));
         this.kafkaProducer = kafkaProducer;
+        listener.onEach(this::consumeEvents);
     }
 
     // Converts an user to a JSON.
@@ -42,7 +48,7 @@ public class UsersManagerImpl implements UsersManagerAPI {
 
     @Override
     public JsonArray getAllUsers() {
-        return users.stream().map(UsersManagerImpl::toJSON).collect(JsonArray::new, JsonArray::add, JsonArray::addAll);
+        return users.values().stream().map(UsersManagerImpl::toJSON).collect(JsonArray::new, JsonArray::add, JsonArray::addAll);
     }
 
     @Override
@@ -53,55 +59,54 @@ public class UsersManagerImpl implements UsersManagerAPI {
             kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(user.getId(), user.getCredit(), 0, 0).encode()));
         } catch (Exception ex) {
             ex.printStackTrace();
-        }
-        this.users.add(user);
+        }        
         var result = UsersManagerImpl.toJSON(user);
-        System.out.println(result);
         return result;
     }
 
     @Override
     public Optional<JsonObject> getUserByID(String userID) {
-        var user = this.users.stream().filter(u -> u.getId().equals(userID)).findFirst();
+        var user = this.users.values().stream().filter(u -> u.getId().equals(userID)).findFirst();
         return user.map(UsersManagerImpl::toJSON);
     }
 
     @Override
     public void rechargeCredit(String userID, int credit) throws RepositoryException, IllegalArgumentException {
-        var userOpt = this.users.stream().filter(u -> u.getId().equals(userID)).findFirst();
+        var userOpt = this.users.values().stream().filter(u -> u.getId().equals(userID)).findFirst();
         if (userOpt.isEmpty()) {
             throw new IllegalArgumentException("Invalid user id");
         }
-
-        var user = userOpt.get(); 
-        user.rechargeCredit(credit); 
-        // this.userRepository.saveUserEvent(user);
         kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, credit, 0, 0).encode()));
     }
 
     @Override
     public void decreaseCredit(String userID, int amount) throws RepositoryException {
-        var userOpt = this.users.stream().filter(u -> u.getId().equals(userID)).findFirst(); 
+        var userOpt = this.users.values().stream().filter(u -> u.getId().equals(userID)).findFirst(); 
         if (userOpt.isEmpty()) {
             throw new IllegalArgumentException("Invalid user id");
         }
-
-        var user = userOpt.get(); 
-        user.decreaseCredit(amount); 
-        // this.userRepository.saveUserEvent(user);
         kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, -amount, 0, 0).encode()));
     }
     
     @Override
     public void move(String userID, double newX, double newY) {
-        var userOpt = this.users.stream().filter(u -> u.getId().equals(userID)).findFirst(); 
+        var userOpt = this.users.values().stream().filter(u -> u.getId().equals(userID)).findFirst(); 
         if (userOpt.isEmpty()) {
             throw new IllegalArgumentException("Invalid user id");
         }
         var user = userOpt.get(); 
         var oldX = user.getX();
         var oldY = user.getY();
-        user.move(newX, newY);
         kafkaProducer.send(new ProducerRecord<String,String>(USER_EVENTS_TOPIC, userEventToJSON(userID, 0, newX - oldX, newY - oldY).encode()));
+    }
+
+    public void consumeEvents(String message) {
+        JsonObject obj = new JsonObject(message);
+        var event = UserEvent.from(obj.getString("userId"), obj.getInteger("credits"), obj.getDouble("deltaX"), obj.getDouble("deltaY"));
+        if(this.users.containsKey(event.userId())){
+            this.users.get(event.userId()).applyEvent(event);
+        } else {
+            this.users.put(event.userId(), new User(event.userId()).applyEvent(event));
+        }
     }
 }

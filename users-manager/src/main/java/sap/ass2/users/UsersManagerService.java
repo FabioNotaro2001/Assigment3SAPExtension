@@ -24,7 +24,7 @@ public class UsersManagerService {
     public UsersManagerService(URL localAddress) throws RepositoryException{
         this.localAddress = localAddress;
         this.listener = new CustomKafkaListener("user-events", KafkaConsumerFactory.defaultConsumer());
-        this.usersManager = new UsersManagerImpl(new UsersRepositoryImpl(this.listener), KafkaProducerFactory.kafkaProducer());
+        this.usersManager = new UsersManagerImpl(new UsersRepositoryImpl(this.listener), KafkaProducerFactory.kafkaProducer(), this.listener);
         this.listener.onEach(e -> logger.log(Level.INFO, "Received event: " + e));
     }
 

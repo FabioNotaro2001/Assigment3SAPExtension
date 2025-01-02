@@ -6,24 +6,31 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.MessageConsumer;
 import sap.ass2.rides.application.EbikesManagerRemoteAPI;
 import sap.ass2.rides.application.Environment;
 import sap.ass2.rides.application.UsersManagerRemoteAPI;
+import io.vertx.core.json.JsonObject;
+import sap.ass2.rides.application.RideEventParser;
+import sap.ass2.rides.domain.EbikeEvent;
 import sap.ass2.rides.domain.EbikeState;
-import sap.ass2.rides.domain.RideEventObserver;
 import sap.ass2.rides.domain.RideState;
+import sap.ass2.rides.domain.RideEndedEvent;
+import sap.ass2.rides.domain.RideStartedEvent;
+import sap.ass2.rides.domain.RideStepEvent;
+import sap.ass2.rides.domain.UserEvent;
+import sap.ass2.rides.domain.V2d;
 
 public class RidesExecutionVerticle extends AbstractVerticle {
     // Events that this verticle can publish.
     private static String RIDES_STEP = "rides-step";
     private static String RIDE_STOP = "ride-stop";
-
-    private RideEventObserver observer;
-    private EbikesManagerRemoteAPI ebikesManager;   // Ebikes service.
-    private UsersManagerRemoteAPI usersManager; // Users service.
     private boolean doLoop = false;
 
     // The key is rideID for both.
@@ -34,22 +41,19 @@ public class RidesExecutionVerticle extends AbstractVerticle {
 
     private MessageConsumer<Object> loopConsumer;   // Consumer thats periodically sends events to the rides to make them proceed.
 
-    static Logger logger = Logger.getLogger("[Rides Executor Verticle]");	
+    static Logger logger = Logger.getLogger("[Rides Executor Verticle]");
 
     private Environment environment;
-
-    public RidesExecutionVerticle(RideEventObserver observer, UsersManagerRemoteAPI usersManager, EbikesManagerRemoteAPI ebikesManager, Environment environment) {
-        this.observer = observer;
-        this.usersManager = usersManager;
-        this.ebikesManager = ebikesManager;
-
+    private KafkaProducer<String, String> producer;
+    
+    public RidesExecutionVerticle(KafkaProducer<String, String> producer, Environment environment) {
         this.rides = new ConcurrentHashMap<>();
         this.timeVars = new ConcurrentHashMap<>();
         this.stopRideRequested = new ConcurrentHashMap<>();
-
         this.loopConsumer = null;
         this.rideStates = new ConcurrentHashMap<>();
         this.environment = environment;
+        this.producer = producer;
     }
 
     public void launch() {
@@ -91,6 +95,47 @@ public class RidesExecutionVerticle extends AbstractVerticle {
             });
         });
     }
+    
+    private static JsonObject userEventToJSON(UserEvent event){
+        return new JsonObject()
+            .put("userId", event.userId())
+            .put("credits", event.creditDelta());
+    }
+
+    private static JsonObject ebikeEventToJSON(EbikeEvent event){
+        return new JsonObject()
+            .put("ebikeId", event.ebikeId())
+            .put("newState", event.newState().orElse(null))
+            .put("deltaPosX", event.deltaPos().x())
+            .put("deltaPosY", event.deltaPos().y())
+            .put("deltaDirX", event.deltaDir().x())
+            .put("deltaDirY", event.deltaDir().y())
+            .put("deltaSpeed", event.deltaSpeed())
+            .put("deltaBatteryLevel", event.deltaBatteryLevel());
+    }
+
+    private void sendRideEvent(RideStartedEvent event){
+        this.producer.send(new ProducerRecord<String,String>("ride-events", RideEventParser.toJSON(event).encode()));
+        logger.log(Level.INFO, "Inviato evento ride start");
+    }
+
+    private void sendRideEvent(RideStepEvent event){
+        this.producer.send(new ProducerRecord<String,String>("ride-events", RideEventParser.toJSON(event).encode()));
+        logger.log(Level.INFO, "Inviato ride step");
+    }
+    
+    private void sendRideEvent(RideEndedEvent event){
+        this.producer.send(new ProducerRecord<String,String>("ride-events", RideEventParser.toJSON(event).encode()));
+        logger.log(Level.INFO, "Inviato evento ride end");
+    }
+
+    private void sendUserEvent(UserEvent event){
+        this.producer.send(new ProducerRecord<String,String>("user-events", userEventToJSON(event).encode()));
+    }
+
+    private void sendEbikeEvent(EbikeEvent event){
+        this.producer.send(new ProducerRecord<String,String>("ebike-events", ebikeEventToJSON(event).encode()));
+    }
 
     private void beginLoopOfEventsIfNecessary() {
         if (this.doLoop) {
@@ -125,37 +170,39 @@ public class RidesExecutionVerticle extends AbstractVerticle {
 
         var eventBus = this.vertx.eventBus();
 
+        this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.ofNullable(EbikeState.IN_USE), new V2d(0, 0), new V2d(0, 0), 1, 0));
+
         MessageConsumer<String> consumer = eventBus.<String>consumer(RIDES_STEP);
         consumer.handler(msg -> {
 
             // SENSE PHASE.
             var user = this.environment.getUser(userID);
             var ebike = this.environment.getEbike(ebikeID);
-            // END OF SENSE PHASE.
+            // END OF SENSE PHASE.  
 
             if(user == null || ebike == null){
                 logger.log(Level.INFO, "qualcosa è null!!!!!!!!!!!!!");
                 this.clearRide(rideID);
-                this.observer.rideEnded(rideID, RideStopReason.SERVICE_ERROR.reason);
-                this.ebikesManager.updateBike(ebikeID, Optional.ofNullable(EbikeState.AVAILABLE), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+                this.sendRideEvent(RideEndedEvent.from(rideID, RideStopReason.SERVICE_ERROR.reason));
+                this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.ofNullable(EbikeState.AVAILABLE), new V2d(0, 0), new V2d(0, 0), -ebike.speed(), 0));
                 consumer.unregister();
                 return;
             }
-
+            
             // Checks of the ride must be stopped.
             var stopRequestedOpt = Optional.ofNullable(this.stopRideRequested.get(rideID));
             if (stopRequestedOpt.isPresent()) {
                 this.clearRide(rideID);
-                this.observer.rideEnded(rideID, stopRequestedOpt.get().reason);
-
-                this.ebikesManager.updateBike(ebikeID, Optional.ofNullable(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+                this.sendRideEvent(RideEndedEvent.from(rideID, stopRequestedOpt.get().reason));
+                this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.ofNullable(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE), new V2d(0, 0), new V2d(0, 0), -ebike.speed(), 0));
                 consumer.unregister();
                 
                 logger.log(Level.INFO, "Ride " + rideID + " stopped");
                 return;
             }
-
+            
             TimeVariables timeVar = this.timeVars.get(rideID);
+
             // DECIDE PHASE.
             RideState rideState = this.rideStates.get(rideID);
             if(rideState == RideState.GOING_TO_USER){
@@ -185,12 +232,8 @@ public class RidesExecutionVerticle extends AbstractVerticle {
 
                 // ACT PHASE.
                 // Notify observer about the current ride status.
-                this.observer.rideStep(rideID, newX, newY, dirX, dirY, 1, ebike.batteryLevel());
-                    
-                this.ebikesManager.updateBike(ebikeID, Optional.empty(),
-                Optional.of(newX), Optional.of(newY),
-                Optional.of(dirX), Optional.of(dirY),
-                Optional.of(1.0), Optional.empty());
+                this.sendRideEvent(RideStepEvent.from(rideID, newX, newY, newDirX, newDirY, 1, ebike.batteryLevel()));
+                this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.empty(), new V2d(newX - oldX, newY - oldY), new V2d(newDirX - dirX, newDirY - dirY), 0, 0));                    
                 // END OF ACT PHASE.
             } else {    // Regular ride type.
                 // DECIDE PHASE.
@@ -210,7 +253,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     var newDirX = dirX;
                     var newDirY = dirY;
                     
-                    var newBatteryLevel = ebike.batteryLevel(); // Battery level.
+                    var batteryLevelDecrease = 0; // Battery level.
                     
                     // Handle boundary conditions for bike's location.
                     if (newX > 200 || newX < -200) {
@@ -238,7 +281,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     // Update user credits every 2000 milliseconds.
                     var elapsedTimeSinceLastDecredit = System.currentTimeMillis() - timeVar.lastTimeDecreasedCredit();
                     if (elapsedTimeSinceLastDecredit > 2000) {
-                        usersManager.decreaseCredit(userID, 1);
+                        this.sendUserEvent(UserEvent.from(userID, -1, 0, 0));
                         
                         timeVar = timeVar.updateLastTimeDecreasedCredit(System.currentTimeMillis());
                     }
@@ -246,19 +289,15 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     // Decrease battery level every 1500 milliseconds.
                     var elapsedTimeSinceLastBatteryDecreased = System.currentTimeMillis() - timeVar.lastTimeBatteryDecreased();
                     if (elapsedTimeSinceLastBatteryDecreased > 1500) {
-                        newBatteryLevel--;
+                        batteryLevelDecrease--;
                         
                         timeVar = timeVar.updateLastTimeBatteryDecreased(System.currentTimeMillis());
                     }
                     
                     // Notify observer about the current ride status.
-                    this.observer.rideStep(rideID, newX, newY, newDirX, newDirY, 1, newBatteryLevel);
-                    
-                    this.ebikesManager.updateBike(ebikeID, Optional.empty(),
-                    Optional.of(newX), Optional.of(newY),
-                    Optional.of(newDirX), Optional.of(newDirY),
-                    Optional.of(1.0), Optional.of(newBatteryLevel));
-                    this.usersManager.move(userID, newX, newY);
+                    this.sendRideEvent(RideStepEvent.from(rideID, newX, newY, newDirX, newDirY, 1, ebike.batteryLevel() + batteryLevelDecrease));
+                    this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.empty(), new V2d(newX - oldX, newY - oldY), new V2d(newDirX - dirX, newDirY - dirY), 0, batteryLevelDecrease));
+                    this.sendUserEvent(UserEvent.from(userID, 0, newX - user.x(), newY - user.y()));
                     // END OF ACT PHASE.
                     
                     this.timeVars.put(rideID, timeVar);
@@ -266,11 +305,10 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     logger.log(Level.INFO, "Ride " + rideID + " event");
                 } else {
                     // The ride cannot proceed (insufficient credit or battery level).
-                    this.ebikesManager.updateBike(ebikeID, Optional.of(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE),
-                    Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+                    this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.of(ebike.batteryLevel() > 0 ? EbikeState.AVAILABLE : EbikeState.MAINTENANCE), new V2d(0, 0), new V2d(0, 0), -ebike.speed(), 0));
                     
                     this.clearRide(rideID);
-                    this.observer.rideEnded(rideID, (ebike.batteryLevel() > 0 ? RideStopReason.USER_RAN_OUT_OF_CREDIT : RideStopReason.EBIKE_RAN_OUT_OF_BATTERY).reason);
+                    this.sendRideEvent(RideEndedEvent.from(rideID, (ebike.batteryLevel() > 0 ? RideStopReason.USER_RAN_OUT_OF_CREDIT : RideStopReason.EBIKE_RAN_OUT_OF_BATTERY).reason));
                     consumer.unregister();
                     
                     logger.log(Level.INFO, "Ride " + rideID + " ended");
@@ -279,7 +317,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
         });
 
         this.rides.put(rideID, consumer);
-        this.observer.rideStarted(rideID, userID, ebikeID);
+        this.sendRideEvent(RideStartedEvent.from(rideID, userID, ebikeID));
         this.beginLoopOfEventsIfNecessary();
     }
 

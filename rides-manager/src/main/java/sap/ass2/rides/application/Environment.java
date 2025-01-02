@@ -20,11 +20,11 @@ public class Environment {
     private Map<String, User> users;
     private Map<String, Ebike> ebikes;
     private boolean ready;
-    private static Logger logger = Logger.getLogger("[ENVIRONMENT]");
+    private static Logger logger = Logger.getLogger("[EVENT COLLECTOR]");
 
-    public Environment(CustomKafkaListener listenerForUsers, CustomKafkaListener listenerForEbikes){
-        listenerForUsers.onEach(this::consumeUsersEvent);
-        listenerForEbikes.onEach(this::consumeEbikesEvent);
+    public Environment(CustomKafkaListener listener){
+        listener.onEach("user-events", this::consumeUserEvents);
+        listener.onEach("ebike-events", this::consumeEbikeEvents);
         this.ready = false;
     }
 
@@ -36,7 +36,7 @@ public class Environment {
     }
 
     private User userFromJSON(JsonObject obj){
-        return new User(obj.getString("userId"), obj.getInteger("credit"), obj.getDouble("deltaX"), obj.getDouble("deltaY"));
+        return new User(obj.getString("userId"), obj.getInteger("credit"), obj.getDouble("x"), obj.getDouble("y"));
     }
 
     private Ebike ebikeFromJSON(JsonObject obj){
@@ -64,9 +64,9 @@ public class Environment {
         return this.ready;
     }
 
-    private void consumeUsersEvent(String message){
+    private void consumeUserEvents(String message){
         JsonObject obj = new JsonObject(message);
-        var event = UserEvent.from(obj.getString("userId"), obj.getInteger("credits"), obj.getDouble("deltaX"), obj.getDouble("deltaY"));
+        var event = UserEvent.from(obj.getString("userId"), obj.getInteger("credits"), obj.getDouble("deltaX"), obj.getDouble("deltaY") );
         String id = event.userId();
         if(this.users.containsKey(id)){
             var user = this.users.get(id);
@@ -77,7 +77,7 @@ public class Environment {
         logger.log(Level.INFO, "User update: " + obj);
     }
 
-    private void consumeEbikesEvent(String message){
+    private void consumeEbikeEvents(String message){
         JsonObject obj = new JsonObject(message);
         var event = EbikeEvent.from(obj.getString("ebikeId"), Optional.ofNullable(obj.getString("newState")).map(EbikeState::valueOf),
                                     new V2d(obj.getDouble("deltaPosX"),obj.getDouble("deltaPosY")), new V2d(obj.getDouble("deltaDirX"),obj.getDouble("deltaDirY")),
