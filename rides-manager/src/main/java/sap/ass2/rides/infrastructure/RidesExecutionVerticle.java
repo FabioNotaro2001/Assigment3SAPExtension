@@ -13,9 +13,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.MessageConsumer;
-import sap.ass2.rides.application.EbikesManagerRemoteAPI;
 import sap.ass2.rides.application.Environment;
-import sap.ass2.rides.application.UsersManagerRemoteAPI;
 import io.vertx.core.json.JsonObject;
 import sap.ass2.rides.application.RideEventParser;
 import sap.ass2.rides.domain.EbikeEvent;
@@ -99,7 +97,9 @@ public class RidesExecutionVerticle extends AbstractVerticle {
     private static JsonObject userEventToJSON(UserEvent event){
         return new JsonObject()
             .put("userId", event.userId())
-            .put("credits", event.creditDelta());
+            .put("credits", event.creditDelta())
+            .put("deltaX", event.deltaX())
+            .put("deltaY", event.deltaY());
     }
 
     private static JsonObject ebikeEventToJSON(EbikeEvent event){
@@ -223,17 +223,20 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                 var newDirX = user.x() - newX;
                 var newDirY = user.y() - newY;
                 var newDist = Math.sqrt(newDirX * newDirX + newDirY * newDirY);
+                boolean userReached = false;
                 if(newDist >= dist){
                     newX = user.x();
                     newY = user.y();
+                    userReached = true;
                     this.rideStates.put(rideID, RideState.REGULAR);
                 }
                 // END OF DECIDE PHASE.
 
                 // ACT PHASE.
                 // Notify observer about the current ride status.
-                this.sendRideEvent(RideStepEvent.from(rideID, newX, newY, newDirX, newDirY, 1, ebike.batteryLevel()));
-                this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.empty(), new V2d(newX - oldX, newY - oldY), new V2d(newDirX - dirX, newDirY - dirY), 0, 0));                    
+                this.sendRideEvent(RideStepEvent.from(rideID, newX, newY, dirX, dirY, 1, ebike.batteryLevel()));
+                this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.empty(), new V2d(newX - oldX, newY - oldY), 
+                    new V2d((!userReached ? dirX / dist : 1.0) - ebike.dirX(), (!userReached ? dirY / dist : 0.0) - ebike.dirY()), 0, 0));                    
                 // END OF ACT PHASE.
             } else {    // Regular ride type.
                 // DECIDE PHASE.
@@ -280,8 +283,9 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     // ACT PHASE.
                     // Update user credits every 2000 milliseconds.
                     var elapsedTimeSinceLastDecredit = System.currentTimeMillis() - timeVar.lastTimeDecreasedCredit();
+                    var userCreditDecrease = 0;
                     if (elapsedTimeSinceLastDecredit > 2000) {
-                        this.sendUserEvent(UserEvent.from(userID, -1, 0, 0));
+                        userCreditDecrease--;
                         
                         timeVar = timeVar.updateLastTimeDecreasedCredit(System.currentTimeMillis());
                     }
@@ -297,7 +301,7 @@ public class RidesExecutionVerticle extends AbstractVerticle {
                     // Notify observer about the current ride status.
                     this.sendRideEvent(RideStepEvent.from(rideID, newX, newY, newDirX, newDirY, 1, ebike.batteryLevel() + batteryLevelDecrease));
                     this.sendEbikeEvent(EbikeEvent.from(ebikeID, Optional.empty(), new V2d(newX - oldX, newY - oldY), new V2d(newDirX - dirX, newDirY - dirY), 0, batteryLevelDecrease));
-                    this.sendUserEvent(UserEvent.from(userID, 0, newX - user.x(), newY - user.y()));
+                    this.sendUserEvent(UserEvent.from(userID, userCreditDecrease, newX - user.x(), newY - user.y()));
                     // END OF ACT PHASE.
                     
                     this.timeVars.put(rideID, timeVar);

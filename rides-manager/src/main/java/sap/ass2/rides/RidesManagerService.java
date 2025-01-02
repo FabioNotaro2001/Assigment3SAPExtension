@@ -29,7 +29,7 @@ public class RidesManagerService {
     public RidesManagerService(URL localAddress, UsersManagerRemoteAPI usersManager, EbikesManagerRemoteAPI ebikesManager) {
         this.localAddress = localAddress;
         this.listener = new CustomKafkaListener(KafkaConsumerFactory.defaultConsumer(), "ride-events", "user-events", "ebike-events");
-        Environment environment = new Environment(this.listener);
+        this.environment = new Environment(this.listener);
 
         this.ridesManager = new RidesManagerImpl(this.environment, KafkaProducerFactory.kafkaProducer(), this.listener);
 

@@ -84,7 +84,7 @@ public class RidesProxy implements RidesAPI {
                         // Rides parameters of the new ride.
                         String rideID = obj.getString("rideId");
                         String userID = obj.getString("userId");
-                        String ebikeID = obj.getString("ebikeId");
+                        String ebikeID = obj.getString("bikeId");
                         
                         // Notify event to the admin GUI.
                         observer.rideStarted(rideID, userID, ebikeID);

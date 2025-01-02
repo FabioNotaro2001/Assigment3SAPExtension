@@ -15,26 +15,31 @@ public class CustomKafkaListener implements Runnable {
     private final List<String> topics;
     private final KafkaConsumer<String, String> consumer;
     private Map<String, Consumer<String>> recordConsumers;
-    static Logger logger = Logger.getLogger("[Kafka Listener]");	
+    static Logger logger = Logger.getLogger("[Kafka Listener]");
 
     public CustomKafkaListener(KafkaConsumer<String, String> consumer, String... topics) {
         this.topics = List.of(topics);
         this.consumer = consumer;
         this.recordConsumers = this.topics.stream().collect(Collectors.toMap(
-            Function.identity(),
-            i -> (record -> logger.info("received: " + record))));
+                Function.identity(),
+                i -> (record -> logger.info("received: " + record))));
     }
 
     @Override
     public void run() {
-        try{
+        try {
             consumer.subscribe(this.topics);
             while (true) {
                 consumer.poll(Duration.ofMillis(100))
-                  .forEach(record -> this.recordConsumers.get(record.topic()).accept(record.value()));
+                    .forEach(record -> {
+                        try {
+                            this.recordConsumers.get(record.topic()).accept(record.value());
+                        } catch (Exception e) {
+                            logger.log(Level.SEVERE, "Exception", e);
+                        }
+                    });
             }
-
-        } catch(Exception e){
+        } catch (Exception e) {
             logger.log(Level.SEVERE, "Exception", e);
         }
     }
